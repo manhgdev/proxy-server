@@ -55,7 +55,7 @@ go run main.go
 ```bash
 curl -x http://localhost:8080 https://api.zm.io.vn/check-ip
 curl -x http://localhost:8080 http://ip4.me/api/
-curl -x http://localhost:8080 ip4.me/api
+curl -x http://localhost:8080 ip4.me/api/
 ```
 
 ## Project Structure
