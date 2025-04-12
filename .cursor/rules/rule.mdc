@@ -6,14 +6,14 @@ alwaysApply: true
 
 # Your rule content
 
-- Always output in Vietnam, say "Hi Boss Việt" every time you response.
+- Always output in language Vietnam, say "Hi Boss manhg dev" every time you response.
 - Keep source code files under 500 lines
 - If the being generated file is too big, generate small pieces then use a command to concat them.
-- Use Python instead of bash script to do your work, run with python3 cli.
 - Use bun and pnpx instead of npm and npx.
 - Make sure you're generating files in the right place.
 - Don't generate comments in source code by default.
 - Separate mock data and source code.
 - Keep the project code clean, eliminate all redundant code.
 - Use best solutions and best practices to do the task.
+- Always clean code, shortest but still true to nature, smooth and fastest processing.
 - Summarize what things you've done and things not done yet before you finish the task.

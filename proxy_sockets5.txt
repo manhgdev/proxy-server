@@ -1,0 +1,3 @@
+# SOCKS5 Proxies
+23.95.45.21:27403:test:test
+172.111.171.80:36327:test:test

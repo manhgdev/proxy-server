@@ -9,27 +9,37 @@ import (
 	"proxy/proxy"
 )
 
+const (
+	// Cấu hình file proxy
+	httpProxyFile   = "proxy_http.txt"
+	socks5ProxyFile = "proxy_sockets5.txt"
+
+	// Cổng lắng nghe
+	serverPort = ":8081"
+)
+
 func main() {
-	// Create proxy manager
+	log.Println("[INFO] Khởi động proxy server")
+
+	// Tạo proxy manager
 	pm := proxy.NewProxyManager()
 
-	// Load proxies from file
-	if err := proxy.LoadProxies("proxy_list.txt", pm); err != nil {
+	// Tải proxy từ nhiều file
+	if err := proxy.LoadProxiesFromMultipleFiles(httpProxyFile, socks5ProxyFile, pm); err != nil {
 		log.Fatalf("[ERROR] Failed to load proxies: %v", err)
 	}
 
-	// Start monitoring proxy list
-	go proxy.MonitorProxyList("proxy_list.txt", pm)
+	// Bắt đầu giám sát danh sách proxy
+	go proxy.MonitorProxyList(httpProxyFile, socks5ProxyFile, pm)
 
-	// Start proxy server
+	// Khởi động proxy server
 	go func() {
-		// Changed port from 8080 to 8081 for testing
-		if err := proxy.StartProxyServer(pm, ":8081"); err != nil {
+		if err := proxy.StartProxyServer(pm, serverPort); err != nil {
 			log.Fatalf("[ERROR] Failed to start proxy server: %v", err)
 		}
 	}()
 
-	// Handle graceful shutdown
+	// Xử lý tắt graceful
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	<-sigChan

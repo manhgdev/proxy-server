@@ -9,11 +9,49 @@ import (
 	"time"
 )
 
-// LoadProxies loads proxies from a file
+// ProxyType định nghĩa loại proxy
+type ProxyType string
+
+const (
+	ProxyTypeHTTP    ProxyType = "http"
+	ProxyTypeSOCKS5  ProxyType = "socks5"
+	ProxyTypeUnknown ProxyType = "unknown"
+)
+
+// LoadProxiesFromMultipleFiles tải proxy từ nhiều file
+func LoadProxiesFromMultipleFiles(httpFile, socks5File string, pm *ProxyManager) error {
+	// Tải các proxy HTTP
+	if httpFile != "" {
+		if err := LoadProxiesWithType(httpFile, ProxyTypeHTTP, pm); err != nil {
+			log.Printf("[WARN] Error loading HTTP proxies: %v", err)
+		}
+	}
+
+	// Tải các proxy SOCKS5
+	if socks5File != "" {
+		if err := LoadProxiesWithType(socks5File, ProxyTypeSOCKS5, pm); err != nil {
+			log.Printf("[WARN] Error loading SOCKS5 proxies: %v", err)
+		}
+	}
+
+	// Kiểm tra xem có proxy nào được tải không
+	if pm.GetProxyCount() == 0 {
+		return fmt.Errorf("no valid proxies found in any file")
+	}
+
+	return nil
+}
+
+// LoadProxies tải proxy từ một file duy nhất (cho tương thích ngược)
 func LoadProxies(filename string, pm *ProxyManager) error {
+	return LoadProxiesWithType(filename, ProxyTypeHTTP, pm)
+}
+
+// LoadProxiesWithType tải proxy từ file với type xác định
+func LoadProxiesWithType(filename string, proxyType ProxyType, pm *ProxyManager) error {
 	file, err := os.Open(filename)
 	if err != nil {
-		return fmt.Errorf("error opening proxy file: %v", err)
+		return fmt.Errorf("error opening proxy file %s: %v", filename, err)
 	}
 	defer file.Close()
 
@@ -21,80 +59,90 @@ func LoadProxies(filename string, pm *ProxyManager) error {
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
-		if line == "" {
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue // Bỏ qua dòng trống và comment
+		}
+
+		// Parse proxy URL dựa vào định dạng
+		proxy, err := ParseProxy(line)
+		if err != nil {
+			log.Printf("[WARN] Invalid proxy format in %s: %s, error: %v", filename, line, err)
 			continue
 		}
 
-		// Parse proxy URL based on format
-		var proxy *Proxy
+		// Gán type cho proxy
+		proxy.Type = proxyType
+		proxy.IsWorking = true // Giả định hoạt động ban đầu
 
-		// Check if proxy URL contains @ (user:pass@host:port format)
-		if strings.Contains(line, "@") {
-			parts := strings.Split(line, "@")
-			if len(parts) == 2 {
-				auth := strings.Split(parts[0], ":")
-				if len(auth) == 2 {
-					proxy = &Proxy{
-						URL:      fmt.Sprintf("http://%s", parts[1]),
-						Username: auth[0],
-						Password: auth[1],
-						LastUsed: time.Time{},
-					}
-				}
-			}
-		} else if strings.Count(line, ":") == 3 {
-			// ip:port:user:pass format
-			parts := strings.Split(line, ":")
-			if len(parts) == 4 {
-				proxy = &Proxy{
-					URL:      fmt.Sprintf("http://%s:%s", parts[0], parts[1]),
-					Username: parts[2],
-					Password: parts[3],
-					LastUsed: time.Time{},
-				}
-			}
-		} else {
-			// ip:port or domain:port format
-			proxy = &Proxy{
-				URL:      fmt.Sprintf("http://%s", line),
-				LastUsed: time.Time{},
+		// Đảm bảo URL có prefix đúng với loại proxy
+		if !strings.Contains(proxy.URL, "://") {
+			if proxyType == ProxyTypeSOCKS5 {
+				proxy.URL = "socks5://" + proxy.URL
+			} else {
+				proxy.URL = "http://" + proxy.URL
 			}
 		}
 
-		if proxy != nil && proxy.URL != "" {
-			proxies = append(proxies, proxy)
-		}
+		proxies = append(proxies, proxy)
+	}
+
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("error reading proxy file %s: %v", filename, err)
 	}
 
 	pm.mu.Lock()
-	pm.proxies = proxies
-	pm.used = make(map[string]time.Time)
+	for _, proxy := range proxies {
+		pm.AddProxy(proxy)
+	}
 	pm.mu.Unlock()
 
-	log.Printf("[INFO] Loaded %d proxies from %s", len(proxies), filename)
-	return scanner.Err()
+	log.Printf("[INFO] Loaded %d %s proxies from %s", len(proxies), proxyType, filename)
+	return nil
 }
 
-// MonitorProxyList monitors a proxy list file for changes
-func MonitorProxyList(filename string, pm *ProxyManager) {
-	var lastMod time.Time
+// MonitorProxyList giám sát các file proxy để cập nhật
+func MonitorProxyList(httpFile, socks5File string, pm *ProxyManager) {
+	var lastModHTTP, lastModSOCKS5 time.Time
 
-	// Get initial file modification time without loading immediately
-	stat, err := os.Stat(filename)
-	if err == nil {
-		lastMod = stat.ModTime()
+	// Lấy thời gian sửa đổi ban đầu
+	if httpFile != "" {
+		if stat, err := os.Stat(httpFile); err == nil {
+			lastModHTTP = stat.ModTime()
+		}
+	}
+
+	if socks5File != "" {
+		if stat, err := os.Stat(socks5File); err == nil {
+			lastModSOCKS5 = stat.ModTime()
+		}
 	}
 
 	for {
 		time.Sleep(5 * time.Second)
 
-		stat, err := os.Stat(filename)
-		if err == nil {
-			if stat.ModTime() != lastMod {
-				if err := LoadProxies(filename, pm); err != nil {
-					log.Printf("[ERROR] Error reloading proxies: %v", err)
+		// Kiểm tra file HTTP proxy
+		if httpFile != "" {
+			if stat, err := os.Stat(httpFile); err == nil {
+				if stat.ModTime() != lastModHTTP {
+					log.Printf("[INFO] HTTP proxy file %s changed, reloading", httpFile)
+					if err := LoadProxiesWithType(httpFile, ProxyTypeHTTP, pm); err != nil {
+						log.Printf("[ERROR] Error reloading HTTP proxies: %v", err)
+					}
+					lastModHTTP = stat.ModTime()
 				}
-				lastMod = stat.ModTime()
+			}
+		}
+
+		// Kiểm tra file SOCKS5 proxy
+		if socks5File != "" {
+			if stat, err := os.Stat(socks5File); err == nil {
+				if stat.ModTime() != lastModSOCKS5 {
+					log.Printf("[INFO] SOCKS5 proxy file %s changed, reloading", socks5File)
+					if err := LoadProxiesWithType(socks5File, ProxyTypeSOCKS5, pm); err != nil {
+						log.Printf("[ERROR] Error reloading SOCKS5 proxies: %v", err)
+					}
+					lastModSOCKS5 = stat.ModTime()
+				}
 			}
 		}
 	}

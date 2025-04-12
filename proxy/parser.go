@@ -9,8 +9,8 @@ import (
 // ParseProxy parses a proxy string into a Proxy struct
 func ParseProxy(line string) (*Proxy, error) {
 	line = strings.TrimSpace(line)
-	if line == "" {
-		return nil, fmt.Errorf("empty line")
+	if line == "" || strings.HasPrefix(line, "#") {
+		return nil, fmt.Errorf("empty line or comment")
 	}
 
 	// Check if proxy URL contains @ (user:pass@host:port format)
@@ -20,10 +20,11 @@ func ParseProxy(line string) (*Proxy, error) {
 			auth := strings.Split(parts[0], ":")
 			if len(auth) == 2 {
 				return &Proxy{
-					URL:      fmt.Sprintf("http://%s", parts[1]),
+					URL:      parts[1],
 					Username: auth[0],
 					Password: auth[1],
 					LastUsed: time.Time{},
+					Type:     ProxyTypeUnknown,
 				}, nil
 			}
 		}
@@ -32,17 +33,19 @@ func ParseProxy(line string) (*Proxy, error) {
 		parts := strings.Split(line, ":")
 		if len(parts) == 4 {
 			return &Proxy{
-				URL:      fmt.Sprintf("http://%s:%s", parts[0], parts[1]),
+				URL:      fmt.Sprintf("%s:%s", parts[0], parts[1]),
 				Username: parts[2],
 				Password: parts[3],
 				LastUsed: time.Time{},
+				Type:     ProxyTypeUnknown,
 			}, nil
 		}
 	} else {
 		// ip:port or domain:port format
 		return &Proxy{
-			URL:      fmt.Sprintf("http://%s", line),
+			URL:      line,
 			LastUsed: time.Time{},
+			Type:     ProxyTypeUnknown,
 		}, nil
 	}
 
