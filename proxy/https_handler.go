@@ -68,6 +68,11 @@ func handleHTTPSProxy(clientConn net.Conn, reader *bufio.Reader, firstLine strin
 				excludeURL = lastProxy.URL
 			}
 			proxy = pm.GetNextWorkingProxyWithFilter(excludeURL, httpOnlySelector)
+			if proxy == nil {
+				logger.Error("No more available HTTP proxies to try after %d attempts", retry)
+				clientConn.Write([]byte("HTTP/1.1 502 Bad Gateway\r\n\r\n"))
+				return
+			}
 			logger.Info("HTTPS Retry %d/%d with proxy %s", retry, pm.maxRetries, proxy.URL)
 		}
 
