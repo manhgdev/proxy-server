@@ -53,16 +53,20 @@
   _id: ObjectId,
   wallet_id: ObjectId,
   user_id: ObjectId,
-  type: String,            // "deposit", "withdrawal", "purchase", "refund"
+  type: String,            // "deposit", "withdrawal", "purchase", "refund", "renewal"
   amount: Number,          // Số tiền giao dịch
   balance_before: Number,  // Số dư trước giao dịch
   balance_after: Number,   // Số dư sau giao dịch
   currency: String,
   status: String,          // "pending", "completed", "failed", "cancelled"
   description: String,
+  bonus_amount: Number,    // Tiền thưởng/hoa hồng nếu có
+  bonus_percent: Number,   // Phần trăm thưởng/hoa hồng
   metadata: {
     payment_method: String,    // "bank_transfer", "credit_card", etc.
     order_id: ObjectId,        // Tham chiếu đến đơn hàng (nếu có)
+    plan_id: ObjectId,         // Tham chiếu đến UserPlans nếu là renewal
+    renewal_id: ObjectId,      // Tham chiếu đến RenewalRecords nếu là renewal
     transaction_id: String,    // ID giao dịch từ bên thứ ba
     payment_proof: String      // URL đến ảnh chứng từ
   },
@@ -71,7 +75,25 @@
 }
 ```
 
-### 4. ProductPackages
+### 4. BonusTiers
+```javascript
+{
+  _id: ObjectId,
+  name: String,              // Tên mức thưởng
+  min_amount: Number,        // Số tiền nạp tối thiểu
+  bonus_percent: Number,     // Phần trăm thưởng
+  bonus_max: Number,         // Số tiền thưởng tối đa (nếu có)
+  active: Boolean,
+  currency: String,          // VND, USD, etc.
+  start_date: Date,          // Ngày bắt đầu áp dụng
+  end_date: Date,            // Ngày kết thúc (null nếu không giới hạn)
+  description: String,
+  created_at: Date,
+  updated_at: Date
+}
+```
+
+### 5. ProductPackages
 ```javascript
 {
   _id: ObjectId,
@@ -83,6 +105,9 @@
   is_rotating: Boolean,
   is_bandwidth: Boolean,       // True for bandwidth-based packages
   duration_days: Number,
+  renewal_available: Boolean,  // Có thể gia hạn hay không
+  renewal_price: Number,       // Giá gia hạn (thường sẽ thấp hơn giá mua mới)
+  renewal_discount: Number,    // % giảm giá khi gia hạn
   price: Number,               // Base price or per IP price
   price_per_gb: Number,        // For bandwidth packages
   min_quantity: Number,        // Minimum number of IPs or GB
@@ -104,7 +129,7 @@
 }
 ```
 
-### 5. Proxies
+### 6. Proxies
 ```javascript
 {
   _id: ObjectId,
@@ -121,8 +146,9 @@
   isp: String,
   asn: Number,
   connection_type: String,    // "mobile", "broadband", "fiber"
-  status: String,             // "active", "inactive", "error"
+  status: String,             // "active", "inactive", "error", "dead"
   last_checked: Date,
+  last_status_change: Date,
   success_rate: Number,       // 0-100%
   avg_response_time: Number,  // ms
   is_blacklisted: Boolean,
@@ -137,7 +163,7 @@
 }
 ```
 
-### 6. ProxyPools
+### 7. ProxyPools
 ```javascript
 {
   _id: ObjectId,
@@ -163,7 +189,7 @@
 }
 ```
 
-### 7. Orders
+### 8. Orders
 ```javascript
 {
   _id: ObjectId,
@@ -173,6 +199,8 @@
   total_amount: Number,
   payment_source: String,      // "wallet", "credit_card", "bank_transfer"
   wallet_transaction_id: ObjectId,  // Tham chiếu đến giao dịch ví (nếu thanh toán bằng ví)
+  order_type: String,          // "new", "renewal", "topup"
+  renewal_for: ObjectId,       // Reference to UserPlans being renewed
   items: [
     {
       package_id: ObjectId,     // Reference to a ProductPackage
@@ -198,7 +226,7 @@
 }
 ```
 
-### 8. UserPlans
+### 9. UserPlans
 ```javascript
 {
   _id: ObjectId,
@@ -210,12 +238,37 @@
   end_date: Date,
   active: Boolean,
   api_key: String,             // API key for this specific plan
+  renewal_status: String,      // "not_set", "pending", "auto", "disabled"
+  renewal_reminder_sent: Boolean,
+  renewal_reminder_date: Date,
+  renewal_price: Number,       // Stored price for renewal
+  original_plan_id: ObjectId,  // If this is a renewed plan, reference to the original
+  renewal_count: Number,       // Number of times this plan has been renewed
   created_at: Date,
   updated_at: Date
 }
 ```
 
-### 9. StaticProxyPlans (embedded document or separate collection)
+### 10. RenewalRecords
+```javascript
+{
+  _id: ObjectId,
+  user_id: ObjectId,
+  original_plan_id: ObjectId,   // Plan being renewed
+  new_plan_id: ObjectId,        // Newly created plan after renewal
+  order_id: ObjectId,           // Order for the renewal
+  wallet_transaction_id: ObjectId,
+  renewal_date: Date,
+  renewal_price: Number,
+  renewal_duration_days: Number,
+  auto_renewal: Boolean,        // Whether it was automatic
+  status: String,               // "success", "failed"
+  error_message: String,        // If failed
+  created_at: Date
+}
+```
+
+### 11. StaticProxyPlans (embedded document or separate collection)
 ```javascript
 {
   _id: ObjectId,
@@ -233,7 +286,29 @@
 }
 ```
 
-### 10. BandwidthPlans (embedded document or separate collection)
+### 12. ProxyReplacements
+```javascript
+{
+  _id: ObjectId,
+  user_id: ObjectId,
+  plan_id: ObjectId,            // Reference to UserPlans
+  static_plan_id: ObjectId,     // Reference to StaticProxyPlans
+  original_proxy_id: ObjectId,  // Proxy bị thay thế
+  original_proxy_ip: String,
+  new_proxy_id: ObjectId,       // Proxy mới
+  new_proxy_ip: String,
+  reason: String,               // "dead", "poor_performance", "blacklisted", "user_request"
+  requested_at: Date,
+  processed_at: Date,
+  status: String,              // "pending", "completed", "rejected"
+  auto_replaced: Boolean,      // Tự động hay do người dùng yêu cầu
+  api_request_id: String,      // ID của request API nếu do người dùng yêu cầu
+  created_at: Date,
+  updated_at: Date
+}
+```
+
+### 13. BandwidthPlans (embedded document or separate collection)
 ```javascript
 {
   _id: ObjectId,
@@ -255,7 +330,7 @@
 }
 ```
 
-### 11. ProxyUsageLogs
+### 14. ProxyUsageLogs
 ```javascript
 {
   _id: ObjectId,
@@ -280,7 +355,7 @@
 }
 ```
 
-### 12. BandwidthTopups
+### 15. BandwidthTopups
 ```javascript
 {
   _id: ObjectId,
@@ -296,19 +371,34 @@
 }
 ```
 
-### 13. Alerts
+### 16. Alerts
 ```javascript
 {
   _id: ObjectId,
   user_id: ObjectId,
   plan_id: ObjectId,           // Reference to UserPlans
-  type: String,                // "expiry", "low_bandwidth", "low_balance"
+  type: String,                // "expiry", "low_bandwidth", "low_balance", "renewal_reminder", "proxy_dead"
   message: String,
   data: Object,                // Additional alert data
   triggered_at: Date,
   is_read: Boolean,
   notification_sent: Boolean,
   notification_method: String  // "email", "sms", "dashboard"
+}
+```
+
+### 17. Settings
+```javascript
+{
+  _id: ObjectId,
+  group: String,              // "renewal", "alerts", "system", "bonus"
+  key: String,
+  value: Mixed,               // String, Number, Boolean, or Object
+  description: String,
+  editable: Boolean,
+  created_at: Date,
+  updated_at: Date,
+  created_by: ObjectId
 }
 ```
 
@@ -330,6 +420,12 @@ db.walletTransactions.createIndex({ "created_at": 1 });
 db.walletTransactions.createIndex({ "type": 1 });
 db.walletTransactions.createIndex({ "status": 1 });
 db.walletTransactions.createIndex({ "wallet_id": 1, "created_at": 1 });
+db.walletTransactions.createIndex({ "metadata.renewal_id": 1 });
+
+db.bonusTiers.createIndex({ "min_amount": 1 });
+db.bonusTiers.createIndex({ "active": 1 });
+db.bonusTiers.createIndex({ "currency": 1 });
+db.bonusTiers.createIndex({ "min_amount": 1, "active": 1, "currency": 1 });
 
 db.productPackages.createIndex({ "name": 1 }, { unique: true });
 db.productPackages.createIndex({ "type": 1 });
@@ -337,6 +433,7 @@ db.productPackages.createIndex({ "category": 1 });
 db.productPackages.createIndex({ "is_bandwidth": 1 });
 db.productPackages.createIndex({ "is_rotating": 1 });
 db.productPackages.createIndex({ "active": 1 });
+db.productPackages.createIndex({ "renewal_available": 1 });
 
 db.proxies.createIndex({ "ip": 1, "port": 1 }, { unique: true });
 db.proxies.createIndex({ "status": 1 });
@@ -348,6 +445,15 @@ db.proxies.createIndex({ "sold": 1 });
 db.proxies.createIndex({ "assigned": 1 });
 db.proxies.createIndex({ "pool_id": 1 });
 db.proxies.createIndex({ "type": 1, "category": 1, "country": 1, "sold": 1 });
+db.proxies.createIndex({ "status": 1, "assigned": 1 });
+
+db.proxyReplacements.createIndex({ "user_id": 1 });
+db.proxyReplacements.createIndex({ "plan_id": 1 });
+db.proxyReplacements.createIndex({ "original_proxy_id": 1 });
+db.proxyReplacements.createIndex({ "new_proxy_id": 1 });
+db.proxyReplacements.createIndex({ "status": 1 });
+db.proxyReplacements.createIndex({ "requested_at": 1 });
+db.proxyReplacements.createIndex({ "api_request_id": 1 });
 
 db.orders.createIndex({ "user_id": 1 });
 db.orders.createIndex({ "wallet_id": 1 });
@@ -355,6 +461,8 @@ db.orders.createIndex({ "order_number": 1 }, { unique: true });
 db.orders.createIndex({ "created_at": 1 });
 db.orders.createIndex({ "status": 1 });
 db.orders.createIndex({ "wallet_transaction_id": 1 });
+db.orders.createIndex({ "order_type": 1 });
+db.orders.createIndex({ "renewal_for": 1 });
 
 db.userPlans.createIndex({ "user_id": 1 });
 db.userPlans.createIndex({ "api_key": 1 }, { unique: true });
@@ -362,6 +470,17 @@ db.userPlans.createIndex({ "end_date": 1 });
 db.userPlans.createIndex({ "active": 1 });
 db.userPlans.createIndex({ "plan_type": 1 });
 db.userPlans.createIndex({ "user_id": 1, "active": 1 });
+db.userPlans.createIndex({ "renewal_status": 1 });
+db.userPlans.createIndex({ "end_date": 1, "renewal_status": 1, "active": 1 });
+db.userPlans.createIndex({ "original_plan_id": 1 });
+
+db.renewalRecords.createIndex({ "user_id": 1 });
+db.renewalRecords.createIndex({ "original_plan_id": 1 });
+db.renewalRecords.createIndex({ "new_plan_id": 1 });
+db.renewalRecords.createIndex({ "order_id": 1 });
+db.renewalRecords.createIndex({ "renewal_date": 1 });
+db.renewalRecords.createIndex({ "status": 1 });
+db.renewalRecords.createIndex({ "auto_renewal": 1 });
 
 db.proxyUsageLogs.createIndex({ "timestamp": 1 });
 db.proxyUsageLogs.createIndex({ "user_id": 1 });
@@ -382,4 +501,8 @@ db.alerts.createIndex({ "plan_id": 1 });
 db.alerts.createIndex({ "is_read": 1 });
 db.alerts.createIndex({ "triggered_at": 1 });
 db.alerts.createIndex({ "user_id": 1, "is_read": 1 });
+db.alerts.createIndex({ "type": 1 });
+
+db.settings.createIndex({ "group": 1, "key": 1 }, { unique: true });
+db.settings.createIndex({ "group": 1 });
 ``` 

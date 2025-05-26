@@ -10,6 +10,7 @@ Hệ thống Proxy Server là giải pháp trung gian cho phép người dùng k
 - **Đặc điểm**: Địa chỉ IP cố định không thay đổi
 - **Ứng dụng**: Phù hợp cho SEO, quản lý nhiều tài khoản, duyệt web ổn định
 - **Loại proxy**: Datacenter hoặc Residential
+- **Thay thế IP**: Khi IP chết hoặc kém hiệu suất, có thể yêu cầu thay thế qua API
 
 ### Proxy Xoay (Rotating Proxy)
 - **Đặc điểm**: Tự động thay đổi địa chỉ IP theo chu kỳ hoặc yêu cầu
@@ -30,12 +31,64 @@ Hệ thống bao gồm một cơ chế ví tiền điện tử tích hợp giúp
 - **Nạp tiền**: Hỗ trợ nhiều phương thức nạp tiền (chuyển khoản, thẻ tín dụng, Paypal...)
 - **Lịch sử giao dịch**: Ghi lại chi tiết tất cả hoạt động nạp và sử dụng
 - **Thanh toán tự động**: Mua proxy hoặc nạp thêm băng thông trực tiếp từ số dư trong ví
+- **Hoa hồng theo mức nạp**: Tỷ lệ hoa hồng tăng theo số tiền nạp, khuyến khích nạp nhiều hơn
 
 ### Quy trình thanh toán
 1. Người dùng nạp tiền vào ví
-2. Khi mua proxy hoặc nạp thêm băng thông, tiền sẽ được trừ trực tiếp từ ví
-3. Hệ thống cảnh báo khi số dư thấp
-4. Lịch sử giao dịch chi tiết hiển thị trong trang cá nhân
+2. Hệ thống tính toán hoa hồng dựa trên mức nạp
+3. Khi mua proxy hoặc nạp thêm băng thông, tiền sẽ được trừ trực tiếp từ ví
+4. Hệ thống cảnh báo khi số dư thấp
+5. Lịch sử giao dịch chi tiết hiển thị trong trang cá nhân
+
+### Chính sách hoa hồng nạp tiền
+- Hệ thống áp dụng tỷ lệ hoa hồng khác nhau theo mức nạp
+- Ví dụ:
+  - Nạp 1-5 triệu: Thưởng 3%
+  - Nạp 5-10 triệu: Thưởng 5%
+  - Nạp trên 10 triệu: Thưởng 8%
+- Tiền thưởng được cộng trực tiếp vào ví và có thể sử dụng ngay
+
+## Hệ thống Gia hạn Proxy
+
+Hệ thống cung cấp các tùy chọn gia hạn linh hoạt cho người dùng:
+
+### Đặc điểm chính
+- **Ưu đãi giá**: Gia hạn thường có mức giá ưu đãi so với mua mới
+- **Giữ nguyên IP**: Với proxy tĩnh, gia hạn giúp giữ nguyên các IP đang sử dụng
+- **Tự động gia hạn**: Người dùng có thể bật tính năng tự động gia hạn
+- **Nhắc nhở**: Thông báo trước khi proxy sắp hết hạn
+
+### Quy trình gia hạn
+1. Người dùng nhận thông báo khi proxy sắp hết hạn (thông qua email, dashboard)
+2. Người dùng chọn gia hạn theo thời hạn mong muốn
+3. Thanh toán diễn ra tự động từ ví điện tử
+4. Proxy được gia hạn và thời hạn được cập nhật
+
+### Tự động gia hạn
+- Người dùng có thể cấu hình tự động gia hạn cho từng gói proxy
+- Hệ thống kiểm tra số dư ví trước khi thực hiện gia hạn
+- Thông báo kết quả gia hạn qua email và dashboard
+
+## Quản lý và bảo trì Proxy
+
+### Thay thế IP chết
+- Hệ thống giám sát liên tục tình trạng các IP proxy
+- Khi phát hiện IP chết hoặc hiệu suất kém, hệ thống gửi thông báo
+- Người dùng có thể yêu cầu thay thế qua API hoặc Dashboard
+- Quy trình thay thế diễn ra tự động và nhanh chóng, đảm bảo tính liên tục
+
+### API thay thế IP
+- Endpoint: `/api/v1/proxies/{proxy_id}/replace`
+- Phương thức: POST
+- Yêu cầu xác thực: API key hoặc JWT token
+- Tham số: `reason` (lý do thay thế), `country` (quốc gia ưu tiên, không bắt buộc)
+- Kết quả: Thông tin proxy mới đã được thay thế
+
+### Giám sát tình trạng
+- Kiểm tra định kỳ tất cả các proxy trong hệ thống
+- Đo lường thời gian phản hồi, tỷ lệ thành công
+- Phát hiện sớm các dấu hiệu hiệu suất kém hoặc IP bị chặn
+- Tự động di chuyển IP có vấn đề ra khỏi pool
 
 ## Kiến trúc Hệ thống
 
@@ -46,15 +99,17 @@ Hệ thống được xây dựng dựa trên kiến trúc microservices với c
 3. **Auth Service**: Xác thực và ủy quyền
 4. **Billing System**: Quản lý đơn hàng, gói dịch vụ và thanh toán
 5. **Wallet Service**: Quản lý ví điện tử và các giao dịch
-6. **Monitoring Service**: Giám sát trạng thái và hiệu suất của proxy
-7. **Analytics Engine**: Phân tích và báo cáo việc sử dụng
+6. **Renewal Service**: Quản lý gia hạn proxy
+7. **Monitoring Service**: Giám sát trạng thái và hiệu suất của proxy
+8. **Analytics Engine**: Phân tích và báo cáo việc sử dụng
 
 ## Quy trình mua và sử dụng Proxy
 
 ### Đăng ký và nạp tiền
 1. Người dùng đăng ký tài khoản
 2. Nạp tiền vào ví thông qua các phương thức được hỗ trợ
-3. Theo dõi số dư và lịch sử giao dịch trong trang cá nhân
+3. Nhận thưởng hoa hồng tự động theo mức nạp
+4. Theo dõi số dư và lịch sử giao dịch trong trang cá nhân
 
 ### Mua và sử dụng Proxy
 1. Chọn loại proxy (tĩnh, xoay, residential) và gói dịch vụ phù hợp
@@ -62,6 +117,20 @@ Hệ thống được xây dựng dựa trên kiến trúc microservices với c
 3. Thanh toán đơn hàng sử dụng số dư trong ví
 4. Hệ thống cấp proxy và thông tin xác thực
 5. Sử dụng proxy thông qua các phương thức được cung cấp
+
+### Gia hạn Proxy
+1. Nhận thông báo trước khi proxy sắp hết hạn
+2. Vào trang quản lý gói proxy của mình
+3. Chọn tùy chọn gia hạn và thời hạn gia hạn
+4. Xác nhận thanh toán từ ví điện tử
+5. Proxy được gia hạn và thời hạn mới được cập nhật
+
+### Thay thế IP chết
+1. Phát hiện IP không hoạt động hoặc kém hiệu suất
+2. Gửi yêu cầu thay thế qua API hoặc Dashboard
+3. Hệ thống tìm IP mới có cùng tiêu chí (quốc gia, loại, v.v.)
+4. Thay thế IP chết bằng IP mới
+5. Gửi thông báo xác nhận với thông tin IP đã được thay thế
 
 ### Sử dụng Proxy
 - **Xác thực**: Sử dụng username/password hoặc API key
@@ -74,11 +143,14 @@ Hệ thống được xây dựng dựa trên kiến trúc microservices với c
 - Được cấp một số lượng IP cố định trong thời gian sử dụng
 - Mỗi proxy chỉ được bán cho một người dùng (không tái sử dụng)
 - Proxy xoay có thể thay đổi IP theo khoảng thời gian hoặc qua API endpoint
+- Gia hạn đảm bảo giữ nguyên các IP đang sử dụng
+- IP chết có thể được thay thế nhanh chóng qua API
 
 #### Proxy Residential theo Băng Thông:
 - Không giới hạn số lượng IP có thể sử dụng
 - Thanh toán dựa trên dữ liệu đã sử dụng (GB)
 - Có thể nạp thêm băng thông khi sắp hết (thanh toán từ ví)
+- Gia hạn để gia hạn thời gian sử dụng và/hoặc bổ sung GB
 
 ## Cấu trúc Cơ sở Dữ liệu
 
@@ -86,11 +158,14 @@ Hệ thống sử dụng MongoDB với các collections chính như sau:
 - **Users**: Thông tin người dùng
 - **Wallets**: Ví tiền của người dùng
 - **WalletTransactions**: Lịch sử giao dịch ví tiền
+- **BonusTiers**: Các mức thưởng hoa hồng theo số tiền nạp
 - **ProductPackages**: Các gói dịch vụ proxy
 - **Proxies**: Thông tin chi tiết về từng proxy
 - **ProxyPools**: Nhóm proxy theo quốc gia, nhà mạng, v.v.
+- **ProxyReplacements**: Lịch sử thay thế proxy chết
 - **Orders**: Đơn hàng và thanh toán
 - **UserPlans**: Gói dịch vụ của người dùng
+- **RenewalRecords**: Lịch sử gia hạn proxy
 - **StaticProxyPlans/BandwidthPlans**: Chi tiết từng loại gói dịch vụ
 - **ProxyUsageLogs**: Nhật ký sử dụng proxy
 
@@ -128,6 +203,9 @@ bun run start  # Môi trường sản xuất
 ## Các tính năng đặc biệt
 
 - **Ví điện tử tích hợp**: Nạp tiền và thanh toán dễ dàng
+- **Hoa hồng theo mức nạp**: Ưu đãi hơn khi nạp nhiều tiền
+- **Thay thế IP chết**: API và tự động thay thế IP không hoạt động
+- **Gia hạn linh hoạt**: Tự động hoặc thủ công, giữ nguyên IP
 - **Địa chỉ IP Sticky**: Giữ nguyên địa chỉ IP trong một phiên làm việc
 - **Định tuyến theo Quốc gia**: Chọn IP từ quốc gia cụ thể
 - **Xác thực IP**: Xác thực địa chỉ IP thật của proxy

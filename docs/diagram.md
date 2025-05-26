@@ -11,7 +11,7 @@
 │ password_hash     │         │ balance           │                  │ description       │◄─────────┤ port              │
 │ email             │         │ currency          │                  │ type              │          │ username          │
 │ fullname          │         │ locked_amount     │                  │ category          │          │ protocol          │
-│ phone             │         │ created_at        │                  │ protocol          │          │ protocol          │
+│ phone             │         │ created_at        │                  │ protocol          │         
 │ created_at        │         │ updated_at        │                  │ is_rotating       │          │ type              │
 │ updated_at        │         │ last_deposit_at   │                  │ is_bandwidth      │          │ category          │
 │ active            │         │ last_usage_at     │                  │ duration_days     │          │ country           │
